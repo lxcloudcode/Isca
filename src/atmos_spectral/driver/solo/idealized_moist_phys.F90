@@ -57,7 +57,7 @@ use  field_manager_mod, only: MODEL_ATMOS
 
 use rayleigh_bottom_drag_mod, only: rayleigh_bottom_drag_init, compute_rayleigh_bottom_drag
 
-use ml_interface_mod, only: ml_interface_init
+use ml_interface_mod, only: ml_interface_init, read_2d_ml_generated_file
 
 #ifdef RRTM_NO_COMPILE
     ! RRTM_NO_COMPILE not included
@@ -150,6 +150,7 @@ real :: raw_bucket = 0.53       ! default raw coefficient for bucket depth LJJ
 ! end RG Add bucket
 
 logical :: read_conv_perturb_input_file = .false.
+logical :: perturb_conv_with_ml = .false.
 
 namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roughness_heat,  &
                                       do_cloud_simple,                                       &
@@ -162,7 +163,8 @@ namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roug
                                       bucket, init_bucket_depth, init_bucket_depth_land, & !RG Add bucket 
                                       max_bucket_depth_land, robert_bucket, raw_bucket, &
                                       do_socrates_radiation, &
-                                      read_conv_perturb_input_file
+                                      read_conv_perturb_input_file, &
+                                      perturb_conv_with_ml
 
 
 integer, parameter :: num_time_levels = 2 !RG Add bucket - number of time levels added to allow timestepping in this module
@@ -289,7 +291,9 @@ integer ::           &
      id_u_10m,       & ! used for 10m winds and 2m temp
      id_v_10m,       & ! used for 10m winds and 2m temp
      id_q_2m,        & ! used for 2m specific humidity
-     id_rh_2m          ! used for 2m relative humidity
+     id_rh_2m,       & ! used for 2m relative humidity
+     id_pert_t,      &
+     id_pert_q
 
 integer, allocatable, dimension(:,:) :: convflag ! indicates which qe convection subroutines are used
 real,    allocatable, dimension(:,:) :: rad_lat, rad_lon
@@ -677,6 +681,13 @@ id_q_2m = register_diag_field(mod_name, 'sphum_2m',              &
 id_rh_2m = register_diag_field(mod_name, 'rh_2m',                &
      axes(1:2), Time, 'Relative humidity 2m above surface', 'percent')
 
+if(perturb_conv_with_ml) then
+  id_pert_t = register_diag_field(mod_name, 'pert_t',        &
+    axes(1:3), Time, 'Perturbation profile of temperature','K')
+  id_pert_q = register_diag_field(mod_name, 'pert_q',        &
+    axes(1:3), Time, 'Perturbation profile of specific humidity','kg/kg')
+endif
+
 select case(r_conv_scheme)
 
 case(SIMPLE_BETTS_CONV)
@@ -789,7 +800,6 @@ endif
    id_rh = register_diag_field ( mod_name, 'rh',                           &
         axes(1:3), Time, 'relative humidity', 'percent')
 
-
 if (read_conv_perturb_input_file) then
 
     call ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d)
@@ -809,7 +819,9 @@ real, dimension(:,:,:),     intent(inout) :: dt_ug, dt_vg, dt_tg
 real, dimension(:,:,:,:),   intent(inout) :: dt_tracers
 
 real :: delta_t
-real, dimension(size(ug,1), size(ug,2), size(ug,3)) :: tg_tmp, qg_tmp, RH,tg_interp, mc, dt_ug_conv, dt_vg_conv, tstd, qstd, pert_t, pert_q
+real, dimension(size(ug,1), size(ug,2), size(ug,3)) :: tg_tmp, qg_tmp, RH,tg_interp, mc, dt_ug_conv, dt_vg_conv, qstd, pert_t, pert_q
+
+real, dimension(size(ug,1), size(ug,2)) :: tstd
 
 ! Simple cloud scheme variabilies to pass to radiation
 real, dimension(size(ug,1), size(ug,2), size(ug,3))    :: cf_rad, reff_rad, qcl_rad, cca_rad  
@@ -818,7 +830,7 @@ real, intent(in) , dimension(:,:,:), optional :: mask
 integer, intent(in) , dimension(:,:),   optional :: kbot
 
 real, dimension(1,1,1):: tracer, tracertnd
-integer :: nql, nqi, nqa   ! tracer indices for stratiform clouds
+integer :: nql, nqi, nqa, z_tick   ! tracer indices for stratiform clouds
 
 if(current == previous) then
    delta_t = dt_real
@@ -832,10 +844,15 @@ if (bucket) then
 endif
 
 if (perturb_conv_with_ml) then
-  call read_ml_generated_file(p_half, num_levels, tstd, qstd)
+  call read_2d_ml_generated_file(tstd)
 
-  pert_t = tg(:,:,:,previous) + tstd
-  pert_q = grid_tracers(:,:,:,previous,nsphum) + qstd
+  do z_tick=1, num_levels
+    pert_t(:,:,z_tick) = tg(:,:,z_tick,previous) + tstd*(p_full(:,:,z_tick,previous)/p_half(:,:,num_levels+1,previous))
+  enddo
+  if(id_pert_t > 0) used = send_data(id_pert_t, pert_t, Time)
+  if(id_pert_q > 0) used = send_data(id_pert_q, pert_q, Time)  
+else
+  pert_t = tg(:,:,:,previous)
 
 endif
 
@@ -846,7 +863,7 @@ select case(r_conv_scheme)
 case(SIMPLE_BETTS_CONV)
 
    call qe_moist_convection ( delta_t,              pert_t,      &
-   pert_q,        p_full(:,:,:,previous),      &
+   grid_tracers(:,:,:,previous,nsphum),        p_full(:,:,:,previous),      &
                           p_half(:,:,:,previous),                coldT,      &
                                  rain,                            snow,      &
                            conv_dt_tg,                      conv_dt_qg,      &

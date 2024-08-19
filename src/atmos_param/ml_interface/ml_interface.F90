@@ -26,7 +26,7 @@ character(len=10), parameter :: mod_name='ml_interface'
 
 !=================================================================================================================================
 
-public :: ml_interface_init, read_ml_generated_file
+public :: ml_interface_init, read_2d_ml_generated_file
 
 character(len=256) :: conv_input_file  = 'ml_input'
 character(len=256) :: tstd_field_name = 'tstd' 
@@ -67,30 +67,45 @@ subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d)
 
     call interpolator_init( conv_input_file_interp, trim(conv_input_file)//'.nc', rad_lonb_2d, rad_latb_2d, data_out_of_bounds=(/CONSTANT/) )
 
+    module_is_initialized=.true.
+
     return
 end subroutine ml_interface_init
 
 
-subroutine read_ml_generated_file(p_half, num_levels, tstd, qstd)
+! subroutine read_ml_generated_file(p_half, num_levels, tstd, qstd)
 
-    real, dimension(:,:,:), intent(in)  :: p_half
-    integer, intent(in):: num_levels    
-    real, dimension(size(p_half,1),size(p_half,2),size(p_half,3)), intent(out)                   :: tstd, qstd
-    real, dimension(size(p_half,1),size(p_half,2),size(p_half,3)) :: sigma_half    
+!     real, dimension(:,:,:), intent(in)  :: p_half
+!     integer, intent(in):: num_levels    
+!     real, dimension(size(p_half,1),size(p_half,2),size(p_half,3)), intent(out)                   :: tstd, qstd
+!     real, dimension(size(p_half,1),size(p_half,2),size(p_half,3)) :: sigma_half    
+
+!     if(.not.module_is_initialized) then
+!         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
+!       endif
+
+!     do i in range(size(p_half,1))
+!       do j in range(size(p_half,2))
+!         sigma_half(i,j,:) = p_half(i,j,:) /p_half(i,j,num_levels+1) 
+!       enddo
+!     enddo
+
+!     call interpolator( conv_input_file_interp, sigma_half, tstd, tstd_field_name)
+!     call interpolator( conv_input_file_interp, sigma_half, qstd, qstd_field_name)
+
+! end subroutine read_ml_generated_file
+
+subroutine read_2d_ml_generated_file(tstd)
+
+    real, dimension(:,:), intent(out)                   :: tstd
 
     if(.not.module_is_initialized) then
         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
-      endif
+    endif
 
-    do i in range(size(p_half,1))
-      do j in range(size(p_half,2))
-        sigma_half(i,j,:) = p_half(i,j,:) /p_half(i,j,num_levels+1) 
-      enddo
-    enddo
+    call interpolator( conv_input_file_interp, tstd, tstd_field_name)
 
-    call interpolator( conv_input_file_interp, sigma_half, tstd, tstd_field_name)
-    call interpolator( conv_input_file_interp, sigma_half, qstd, qstd_field_name)
+end subroutine read_2d_ml_generated_file
 
-end subroutine read_ml_generated_file
 
 end module ml_interface_mod
