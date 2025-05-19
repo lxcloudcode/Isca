@@ -5,7 +5,7 @@ IMPLICIT NONE
 CONTAINS
 SUBROUTINE example_ml_model(Tsurf_qsurf_orog_sdorog, y_standard_deviations)
 IMPLICIT NONE
-INTEGER, PARAMETER :: real_ennuf = 4
+INTEGER, PARAMETER :: real_ennuf = 8
 
 REAL(KIND=real_ennuf) :: Tsurf_qsurf_orog_sdorog(4)
 

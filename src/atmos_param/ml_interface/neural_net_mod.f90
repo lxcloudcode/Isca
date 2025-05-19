@@ -7,7 +7,7 @@ CONTAINS
 
     IMPLICIT NONE
 
-    INTEGER, PARAMETER                                    :: precision = 4
+    INTEGER, PARAMETER                                    :: precision = 8
     INTEGER                                               :: i, j
 
     INTEGER, INTENT(in)                                   :: n_in, n_out
