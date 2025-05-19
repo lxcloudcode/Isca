@@ -13,6 +13,8 @@ use time_manager_mod, only: time_type
 use interpolator_mod, only: interpolate_type,interpolator_init&
      &,CONSTANT,interpolator
 
+use ennuf_example_mod, only: example_ml_model
+
 implicit none
 private
 !=================================================================================================================================
@@ -106,6 +108,34 @@ subroutine read_2d_ml_generated_file(tstd)
     call interpolator( conv_input_file_interp, tstd, tstd_field_name)
 
 end subroutine read_2d_ml_generated_file
+
+subroutine ENNUF_2d_prediction(temp_in, q_in, tstd)
+
+    real, dimension(:,:), intent(in)   :: temp_in, q_in
+    real, dimension(:,:), intent(out)  :: tstd
+
+    real, dimension(size(temp_in,1), size(temp_in, 2), 4) :: four_predictors
+    real, dimension(2) :: two_outputs
+
+    if(.not.module_is_initialized) then
+        call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
+    endif
+
+    do i = 1, size(temp_in,1)
+        do j = 1, size(temp_in,2)    
+
+            four_predictors(i,j,1) = 1.0 !temp_in(i,j)
+            four_predictors(i,j,2) = 2.0 !temp_in(i,j)
+            four_predictors(i,j,3) = 3.0 !q_in(i,j)
+            four_predictors(i,j,4) = 4.0 !q_in(i,j)
+
+            call example_ml_model(four_predictors, two_outputs)
+
+            tstd(i,j) = two_outputs(1)
+        enddo
+    enddo
+
+end subroutine ENNUF_2d_prediction
 
 
 end module ml_interface_mod

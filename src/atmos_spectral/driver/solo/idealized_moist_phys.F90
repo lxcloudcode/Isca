@@ -62,7 +62,7 @@ use  field_manager_mod, only: MODEL_ATMOS
 
 use rayleigh_bottom_drag_mod, only: rayleigh_bottom_drag_init, compute_rayleigh_bottom_drag
 
-use ml_interface_mod, only: ml_interface_init, read_2d_ml_generated_file
+use ml_interface_mod, only: ml_interface_init, read_2d_ml_generated_file, ENNUF_2d_prediction
 
 #ifdef RRTM_NO_COMPILE
     ! RRTM_NO_COMPILE not included
@@ -156,8 +156,8 @@ real :: robert_bucket = 0.04   ! default robert coefficient for bucket depth LJJ
 real :: raw_bucket = 0.53       ! default raw coefficient for bucket depth LJJ
 ! end Add bucket
 
-logical :: read_conv_perturb_input_file = .false.
 logical :: perturb_conv_with_ml = .false.
+logical :: perturb_ml_using_input_file = .false.
 
 namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roughness_heat,  &
                                       do_cloud_simple, do_cloud_spookie,             &
@@ -170,8 +170,7 @@ namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roug
                                       bucket, init_bucket_depth, init_bucket_depth_land, &
                                       max_bucket_depth_land, robert_bucket, raw_bucket, &
                                       do_socrates_radiation, do_lcl_diffusivity_depth, &
-                                      read_conv_perturb_input_file, &
-                                      perturb_conv_with_ml
+                                      perturb_conv_with_ml, perturb_ml_using_input_file
 
 
 integer, parameter :: num_time_levels = 2 ! Add bucket - number of time levels added to allow timestepping in this module
@@ -830,7 +829,7 @@ endif
    id_rh = register_diag_field ( mod_name, 'rh',                           &
         axes(1:3), Time, 'relative humidity', 'percent')
 
-if (read_conv_perturb_input_file) then
+if (perturb_conv_with_ml) then
 
     call ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d)
 
@@ -875,7 +874,11 @@ if (bucket) then
 endif
 
 if (perturb_conv_with_ml) then
-  call read_2d_ml_generated_file(tstd)
+  if (perturb_ml_using_input_file) then
+    call read_2d_ml_generated_file(tstd)
+  else
+    call ENNUF_2d_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), tstd) !takes in lowest level temperature and sphum and gives back tstd
+  endif
 
   do z_tick=1, num_levels
     pert_t(:,:,z_tick) = tg(:,:,z_tick,previous) + tstd*(p_full(:,:,z_tick,previous)/p_half(:,:,num_levels+1,previous))
