@@ -44,10 +44,11 @@ type(interpolate_type),save :: conv_input_file_interp
 contains
 
 
-subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d)
+subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_ml_using_input_file)
     
     real, intent(in), dimension(:,:) :: rad_lonb_2d, rad_latb_2d
     integer, intent(in) :: is, ie, js, je
+    logical, intent(in) :: perturb_ml_using_input_file
     integer :: nml_unit, ierr, io
 
     if(module_is_initialized) return
@@ -66,8 +67,9 @@ subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d)
 
     if ( mpp_pe() == mpp_root_pe() ) write (stdlog(), nml=ml_interface_nml)
 
-
-    call interpolator_init( conv_input_file_interp, trim(conv_input_file)//'.nc', rad_lonb_2d, rad_latb_2d, data_out_of_bounds=(/CONSTANT/) )
+    if (perturb_ml_using_input_file) then
+        call interpolator_init( conv_input_file_interp, trim(conv_input_file)//'.nc', rad_lonb_2d, rad_latb_2d, data_out_of_bounds=(/CONSTANT/) )
+    endif
 
     module_is_initialized=.true.
 
@@ -116,7 +118,7 @@ subroutine ENNUF_2d_prediction(temp_in, q_in, tstd)
 
     integer :: i, j
     real, dimension(size(temp_in,1), size(temp_in, 2), 4) :: four_predictors
-    real, dimension(2) :: two_outputs
+    real, dimension(size(temp_in,1), size(temp_in, 2), 2) :: two_outputs
 
     if(.not.module_is_initialized) then
         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
@@ -130,9 +132,10 @@ subroutine ENNUF_2d_prediction(temp_in, q_in, tstd)
             four_predictors(i,j,3) = 3.0 !q_in(i,j)
             four_predictors(i,j,4) = 4.0 !q_in(i,j)
 
-            call example_ml_model(four_predictors, two_outputs)
+            call example_ml_model(four_predictors(i,j,:), two_outputs(i,j,:))
 
-            tstd(i,j) = two_outputs(1)
+            tstd(i,j) = two_outputs(i,j,1)
+            write(6,*) four_predictors(i,j,:),two_outputs(i,j,1), two_outputs(i,j,2)
         enddo
     enddo
 

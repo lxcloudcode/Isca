@@ -831,7 +831,7 @@ endif
 
 if (perturb_conv_with_ml) then
 
-    call ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d)
+    call ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_ml_using_input_file)
 
 endif
 
