@@ -1,5 +1,5 @@
 !  ! Easy Neural Networks in the Um in Fortran: Auto-generated module by ENNUF
-MODULE example_ennuf_mod
+MODULE ennuf_example_mod
 USE neural_net_mod, ONLY: dense
 IMPLICIT NONE
 CONTAINS
