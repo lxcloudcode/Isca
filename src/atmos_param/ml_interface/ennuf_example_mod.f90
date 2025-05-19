@@ -5,7 +5,7 @@ IMPLICIT NONE
 CONTAINS
 SUBROUTINE example_ml_model(Tsurf_qsurf_orog_sdorog, y_standard_deviations)
 IMPLICIT NONE
-INTEGER, PARAMETER :: real_ennuf = 8
+INTEGER, PARAMETER :: real_ennuf = 4
 
 REAL(KIND=real_ennuf) :: Tsurf_qsurf_orog_sdorog(4)
 
@@ -214,13 +214,13 @@ DATA w_keras_tensor_2(16, :) / -0.43444108963012695, -0.30292806029319763 /
 
 
 CALL dense(Tsurf_qsurf_orog_sdorog, y_keras_tensor, 4, 16, w_keras_tensor, &
-b_keras_tensor, 'linear    ' , 0.0)
+b_keras_tensor, 'linear    ' , real(0.0, real_ennuf))
 
 CALL dense(y_keras_tensor, y_keras_tensor_1, 16, 16, w_keras_tensor_1, &
-b_keras_tensor_1, 'linear    ' , 0.0)
+b_keras_tensor_1, 'linear    ' , real(0.0, real_ennuf))
 
 CALL dense(y_keras_tensor_1, y_standard_deviations, 16, 2, w_keras_tensor_2, &
-b_keras_tensor_2, 'linear    ' , 0.0)
+b_keras_tensor_2, 'linear    ' , real(0.0, real_ennuf))
 
 END SUBROUTINE example_ml_model
 END MODULE ennuf_example_mod

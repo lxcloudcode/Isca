@@ -118,7 +118,7 @@ subroutine ENNUF_2d_prediction(temp_in, q_in, tstd)
 
     integer :: i, j
     real, dimension(size(temp_in,1), size(temp_in, 2), 4) :: four_predictors
-    real, dimension(size(temp_in,1), size(temp_in, 2), 2) :: two_outputs
+    real(kind=4), dimension(size(temp_in,1), size(temp_in, 2), 2) :: two_outputs
 
     if(.not.module_is_initialized) then
         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
@@ -132,10 +132,10 @@ subroutine ENNUF_2d_prediction(temp_in, q_in, tstd)
             four_predictors(i,j,3) = 3.0 !q_in(i,j)
             four_predictors(i,j,4) = 4.0 !q_in(i,j)
 
-            call example_ml_model(four_predictors(i,j,:), two_outputs(i,j,:))
+            call example_ml_model(real(four_predictors(i,j,:),4), two_outputs(i,j,:))
 
             tstd(i,j) = two_outputs(i,j,1)
-            write(6,*) four_predictors(i,j,:),two_outputs(i,j,1), two_outputs(i,j,2)
+            write(6,*) real(four_predictors(i,j,:),4), two_outputs(i,j,1), two_outputs(i,j,2)
         enddo
     enddo
 
