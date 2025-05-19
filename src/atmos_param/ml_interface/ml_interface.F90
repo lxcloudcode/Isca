@@ -28,7 +28,7 @@ character(len=10), parameter :: mod_name='ml_interface'
 
 !=================================================================================================================================
 
-public :: ml_interface_init, read_2d_ml_generated_file
+public :: ml_interface_init, read_2d_ml_generated_file, ENNUF_2d_prediction
 
 character(len=256) :: conv_input_file  = 'ml_input'
 character(len=256) :: tstd_field_name = 'tstd' 
@@ -114,6 +114,7 @@ subroutine ENNUF_2d_prediction(temp_in, q_in, tstd)
     real, dimension(:,:), intent(in)   :: temp_in, q_in
     real, dimension(:,:), intent(out)  :: tstd
 
+    integer :: i, j
     real, dimension(size(temp_in,1), size(temp_in, 2), 4) :: four_predictors
     real, dimension(2) :: two_outputs
 
