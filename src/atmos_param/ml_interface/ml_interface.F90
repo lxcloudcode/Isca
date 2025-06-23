@@ -143,6 +143,36 @@ subroutine ENNUF_2d_test_prediction(temp_in, q_in, tstd)
 
 end subroutine ENNUF_2d_test_prediction
 
+function rnorm() result( fn_val )
+    !   Adapted from code released into the public domain by Alan Miller
+    !   https://jblevins.org/mirror/amiller/rnorm.f90
+    !   This version doubles the computations required for many calls
+    !   but is thread-safe.
+    !   Generate a random normal deviate using the polar method.
+    !   Reference: Marsaglia,G. & Bray,T.A. 'A convenient method for generating
+    !              normal variables', Siam Rev., vol.6, 260-264, 1964.
+
+    implicit none
+    real(kind=4)  :: fn_val
+
+    ! Local variables
+    real(kind=4)            :: u, v, sum, sln
+    real(kind=4), parameter :: one = 1.0, vsmall = tiny( one )
+
+    ! Generate a pair of random normals
+    do
+    call random_number( u )
+    call random_number( v )
+    u = scale( u, 1 ) - one
+    v = scale( v, 1 ) - one
+    sum = u*u + v*v + vsmall         ! vsmall added to prevent LOG(zero) / zero
+    if (sum < one) exit
+    end do
+    sln = sqrt(- scale( log(sum), 1 ) / sum)
+    fn_val = u*sln
+return
+end function rnorm
+
 subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, pert_t, pert_q)
 
     real, dimension(:,:,:), intent(in)     :: temp_in, q_in
@@ -154,11 +184,15 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, p
     integer :: i, j, z_tick
     real, dimension(size(temp_in,1), size(temp_in, 2), 6) :: Th_predictors
     real, dimension(size(temp_in,1), size(temp_in, 2), 7) :: RH_predictors
-    real(kind=4), dimension(size(temp_in,1), size(temp_in, 2)) :: Th_outputs, RH_outputs, RHstd, Thstd
+    real(kind=4), dimension(size(temp_in,1), size(temp_in, 2)) :: Th_outputs, RH_outputs, RHstd, Thstd, random_num_theta, random_num_rh
 
     if(.not.module_is_initialized) then
         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
     endif
+
+    !TODO:
+    !Need to add normalise input data here
+    !Need to correct the inputs to the network (rather than 1 2 3 etc)
 
     do i = 1, size(temp_in,1)
         do j = 1, size(temp_in,2)    
@@ -187,13 +221,27 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, p
 
             Thstd(i,j) = Th_outputs(i,j)
 
-            write(6,*) RHstd(i,j), Thstd(i,j)
+            ! make sure random number is drawn from normal distribution with mean of 0 and std of 1. And now clip it between -3 and 3 standard deviations.
+            random_num_theta(i,j) = MIN(rnorm(), 3.0)
+            random_num_rh(i,j)    = MIN(rnorm(), 3.0)
+            random_num_theta(i,j) = MAX(random_num_theta(i,j), -3.0)
+            random_num_rh(i,j)    = MAX(random_num_rh(i,j), -3.0)
+
+
+            write(6,*) RHstd(i,j), Thstd(i,j), random_num_theta(i,j), random_num_rh(i,j)
+
         enddo
     enddo
 
+
+    !TODO:
+    !Need to add redimensionalisation here
+    !Need to think about how to go from predictions of theta and RH to perturbing T and q
+    !Need to clip T and q perturbations so that they're not crazy big
+
   do z_tick=1, num_levels
-    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + Thstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
-    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + RHstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + random_num_theta*Thstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   enddo
 
 end subroutine ENNUF_2d_T_RH_prediction
