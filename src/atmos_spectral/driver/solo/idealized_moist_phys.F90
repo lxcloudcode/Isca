@@ -62,7 +62,7 @@ use  field_manager_mod, only: MODEL_ATMOS
 
 use rayleigh_bottom_drag_mod, only: rayleigh_bottom_drag_init, compute_rayleigh_bottom_drag
 
-use ml_interface_mod, only: ml_interface_init, read_2d_ml_generated_file, ENNUF_2d_prediction
+use ml_interface_mod, only: ml_interface_init, read_2d_ml_generated_file, ENNUF_2d_test_prediction, ENNUF_2d_T_RH_prediction
 
 #ifdef RRTM_NO_COMPILE
     ! RRTM_NO_COMPILE not included
@@ -877,12 +877,10 @@ if (perturb_conv_with_ml) then
   if (perturb_ml_using_input_file) then
     call read_2d_ml_generated_file(tstd)
   else
-    call ENNUF_2d_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), tstd) !takes in lowest level temperature and sphum and gives back tstd
+    ! call ENNUF_2d_test_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), tstd) !takes in lowest level temperature and sphum and gives back tstd
+    call ENNUF_2d_T_RH_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), num_levels, pert_t, pert_rh) !takes in lowest level temperature and sphum and gives back tstd    
   endif
 
-  do z_tick=1, num_levels
-    pert_t(:,:,z_tick) = tg(:,:,z_tick,previous) + tstd*(p_full(:,:,z_tick,previous)/p_half(:,:,num_levels+1,previous))
-  enddo
   if(id_pert_t > 0) used = send_data(id_pert_t, pert_t, Time)
   if(id_pert_q > 0) used = send_data(id_pert_q, pert_q, Time)  
 else

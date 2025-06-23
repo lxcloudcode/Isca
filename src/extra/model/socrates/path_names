@@ -32,6 +32,8 @@ atmos_param/vert_diff/vert_diff.F90
 atmos_param/vert_turb_driver/vert_turb_driver.F90
 atmos_param/ml_interface/ml_interface.F90
 atmos_param/ml_interface/ennuf_example_mod.f90
+atmos_param/ml_interface/ennuf_rh.f90
+atmos_param/ml_interface/ennuf_theta.f90
 atmos_param/ml_interface/neural_net_mod.f90
 atmos_shared/interpolator/interpolator.F90
 atmos_shared/vert_advection/vert_advection.F90

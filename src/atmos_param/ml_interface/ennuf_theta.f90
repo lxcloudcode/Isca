@@ -1,9 +1,9 @@
 
 !  ! Easy Neural Networks in the Um in Fortran: Auto-generated module by ENNUF
-MODULE placeholder_mod
+MODULE ENNUF_T_mod
 IMPLICIT NONE
 CONTAINS
-SUBROUTINE placeholder(input_layer_87, y_dense_495)
+SUBROUTINE ENNUF_T_model(input_layer_87, y_dense_495)
 USE neural_net_mod, ONLY: dense
 IMPLICIT NONE
 REAL(KIND=4) :: input_layer_87(None, 6)
@@ -6345,5 +6345,5 @@ b_keras_tensor_5, 'linear    ' , 0.0)
 
 
 RETURN
-END SUBROUTINE placeholder
-END MODULE placeholder_mod
+END SUBROUTINE ENNUF_T_model
+END MODULE ENNUF_T_mod
