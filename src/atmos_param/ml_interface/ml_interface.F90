@@ -51,7 +51,7 @@ subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_m
     real, intent(in), dimension(:,:) :: rad_lonb_2d, rad_latb_2d
     integer, intent(in) :: is, ie, js, je
     logical, intent(in) :: perturb_ml_using_input_file
-    integer :: nml_unit, ierr, io
+    integer :: nml_unit, ierr, io, nseed
 
     if(module_is_initialized) return
 
@@ -72,6 +72,8 @@ subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_m
     if (perturb_ml_using_input_file) then
         call interpolator_init( conv_input_file_interp, trim(conv_input_file)//'.nc', rad_lonb_2d, rad_latb_2d, data_out_of_bounds=(/CONSTANT/) )
     endif
+
+    call random_seed(size=nseed)
 
     module_is_initialized=.true.
 
@@ -240,8 +242,8 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, p
     !Need to clip T and q perturbations so that they're not crazy big
 
   do z_tick=1, num_levels
-    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + random_num_theta*Thstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
-    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + random_num_theta* Thstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*    RHstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   enddo
 
 end subroutine ENNUF_2d_T_RH_prediction
