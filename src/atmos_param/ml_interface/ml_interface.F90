@@ -15,7 +15,7 @@ use interpolator_mod, only: interpolate_type,interpolator_init&
 
 use ennuf_example_mod, only: example_ml_model
 use ENNUF_RH_mod, only: ENNUF_RH_model
-use ENNUF_T_mod, only: ENNUF_T_model
+use ENNUF_Th_mod, only: ENNUF_Th_model
 
 implicit none
 private
@@ -30,7 +30,7 @@ character(len=10), parameter :: mod_name='ml_interface'
 
 !=================================================================================================================================
 
-public :: ml_interface_init, read_2d_ml_generated_file, ENNUF_2d_prediction
+public :: ml_interface_init, read_2d_ml_generated_file, ENNUF_2d_test_prediction, ENNUF_2d_T_RH_prediction
 
 character(len=256) :: conv_input_file  = 'ml_input'
 character(len=256) :: tstd_field_name = 'tstd' 
@@ -143,14 +143,15 @@ subroutine ENNUF_2d_test_prediction(temp_in, q_in, tstd)
 
 end subroutine ENNUF_2d_test_prediction
 
-subroutine ENNUF_2d_RH_prediction(temp_in, q_in, num_levels, pert_t, pert_q)
+subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, pert_t, pert_q)
 
-    real, dimension(:,:), intent(in)   :: temp_in, q_in
-    integer, intent(in) :: num_levels    
-    real, dimension(:,:), intent(out)  :: pert_t, pert_q
+    real, dimension(:,:,:), intent(in)     :: temp_in, q_in
+    real, dimension(:,:,:), intent(in) :: p_full, p_half
+    integer, intent(in)                  :: num_levels    
+    real, dimension(:,:,:), intent(out)    :: pert_t, pert_q
 
 
-    integer :: i, j
+    integer :: i, j, z_tick
     real, dimension(size(temp_in,1), size(temp_in, 2), 6) :: Th_predictors
     real, dimension(size(temp_in,1), size(temp_in, 2), 7) :: RH_predictors
     real(kind=4), dimension(size(temp_in,1), size(temp_in, 2)) :: Th_outputs, RH_outputs, RHstd, Thstd
@@ -162,39 +163,40 @@ subroutine ENNUF_2d_RH_prediction(temp_in, q_in, num_levels, pert_t, pert_q)
     do i = 1, size(temp_in,1)
         do j = 1, size(temp_in,2)    
 
-            RH_predictors(i,j,1) = 1.0 !temp_in(i,j)
-            RH_predictors(i,j,2) = 2.0 !temp_in(i,j)
-            RH_predictors(i,j,3) = 3.0 !q_in(i,j)
-            RH_predictors(i,j,4) = 4.0 !q_in(i,j)
-            RH_predictors(i,j,5) = 4.0 !q_in(i,j)
-            RH_predictors(i,j,6) = 4.0 !q_in(i,j)
-            RH_predictors(i,j,7) = 4.0 !q_in(i,j)                                    
+            RH_predictors(i,j,1) = 1.0 !temp_in(i,j,num_levels)
+            RH_predictors(i,j,2) = 2.0 !temp_in(i,j,num_levels)
+            RH_predictors(i,j,3) = 3.0 !q_in(i,j,num_levels)
+            RH_predictors(i,j,4) = 4.0 !q_in(i,j,num_levels)
+            RH_predictors(i,j,5) = 4.0 !q_in(i,j,num_levels)
+            RH_predictors(i,j,6) = 4.0 !q_in(i,j,num_levels)
+            RH_predictors(i,j,7) = 4.0 !q_in(i,j,num_levels)                                    
 
             call ENNUF_RH_model(real(RH_predictors(i,j,:),4), RH_outputs(i,j))
 
-            RHstd(i,j) = RH_predictors(i,j)
+            RHstd(i,j) = RH_outputs(i,j)
 
 
-            Th_predictors(i,j,1) = 1.0 !temp_in(i,j)
-            Th_predictors(i,j,2) = 2.0 !temp_in(i,j)
-            Th_predictors(i,j,3) = 3.0 !q_in(i,j)
-            Th_predictors(i,j,4) = 4.0 !q_in(i,j)
-            Th_predictors(i,j,5) = 4.0 !q_in(i,j)
-            Th_predictors(i,j,6) = 4.0 !q_in(i,j)
+            Th_predictors(i,j,1) = 1.0 !temp_in(i,j,num_levels)
+            Th_predictors(i,j,2) = 2.0 !temp_in(i,j,num_levels)
+            Th_predictors(i,j,3) = 3.0 !q_in(i,j,num_levels)
+            Th_predictors(i,j,4) = 4.0 !q_in(i,j,num_levels)
+            Th_predictors(i,j,5) = 4.0 !q_in(i,j,num_levels)
+            Th_predictors(i,j,6) = 4.0 !q_in(i,j,num_levels)
 
-            call ENNUF_RH_model(real(Th_predictors(i,j,:),4), Th_outputs(i,j))
+            call ENNUF_Th_model(real(Th_predictors(i,j,:),4), Th_outputs(i,j))
 
-            Thstd(i,j) = Th_predictors(i,j)
+            Thstd(i,j) = Th_outputs(i,j)
 
+            write(6,*) RHstd(i,j), Thstd(i,j)
         enddo
     enddo
 
   do z_tick=1, num_levels
-    pert_t(:,:,z_tick) = tg(:,:,z_tick,previous) + Thstd*(p_full(:,:,z_tick,previous)/p_half(:,:,num_levels+1,previous))
-    pert_q(:,:,z_tick) = tg(:,:,z_tick,previous) + RHstd*(p_full(:,:,z_tick,previous)/p_half(:,:,num_levels+1,previous))
+    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + Thstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + RHstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   enddo
 
-end subroutine ENNUF_2d_RH_prediction
+end subroutine ENNUF_2d_T_RH_prediction
 
 
 end module ml_interface_mod

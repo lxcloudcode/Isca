@@ -1,12 +1,12 @@
 
 !  ! Easy Neural Networks in the Um in Fortran: Auto-generated module by ENNUF
-MODULE ENNUF_T_mod
+MODULE ENNUF_Th_mod
 IMPLICIT NONE
 CONTAINS
-SUBROUTINE ENNUF_T_model(input_layer_87, y_dense_495)
+SUBROUTINE ENNUF_Th_model(input_layer_87, y_dense_495)
 USE neural_net_mod, ONLY: dense
 IMPLICIT NONE
-REAL(KIND=4) :: input_layer_87(None, 6)
+REAL(KIND=4) :: input_layer_87(6)
 
 
 REAL(KIND=4) :: w_keras_tensor(6, 64)
@@ -6325,25 +6325,25 @@ DATA w_keras_tensor_5(64, :) / -0.24663938581943512 /
 
 
 CALL dense(input_layer_87, y_keras_tensor, 6, 64, w_keras_tensor, &
-b_keras_tensor, 'leakyrelu ' , 0.3)
+b_keras_tensor, 'leakyrelu ' , real(0.3, 4))
 
 CALL dense(y_keras_tensor, y_keras_tensor_1, 64, 64, w_keras_tensor_1, &
-b_keras_tensor_1, 'leakyrelu ' , 0.3)
+b_keras_tensor_1, 'leakyrelu ' , real(0.3, 4))
 
 CALL dense(y_keras_tensor_1, y_keras_tensor_2, 64, 64, w_keras_tensor_2, &
-b_keras_tensor_2, 'leakyrelu ' , 0.3)
+b_keras_tensor_2, 'leakyrelu ' , real(0.3, 4))
 
 CALL dense(y_keras_tensor_2, y_keras_tensor_3, 64, 64, w_keras_tensor_3, &
-b_keras_tensor_3, 'leakyrelu ' , 0.3)
+b_keras_tensor_3, 'leakyrelu ' , real(0.3, 4))
 
 CALL dense(y_keras_tensor_3, y_keras_tensor_4, 64, 64, w_keras_tensor_4, &
-b_keras_tensor_4, 'leakyrelu ' , 0.3)
+b_keras_tensor_4, 'leakyrelu ' , real(0.3, 4))
 
 CALL dense(y_keras_tensor_4, y_dense_495, 64, 1, w_keras_tensor_5, &
-b_keras_tensor_5, 'linear    ' , 0.0)
+b_keras_tensor_5, 'linear    ' , real(0.0, 4))
 
 
 
 RETURN
-END SUBROUTINE ENNUF_T_model
-END MODULE ENNUF_T_mod
+END SUBROUTINE ENNUF_Th_model
+END MODULE ENNUF_Th_mod

@@ -877,8 +877,9 @@ if (perturb_conv_with_ml) then
   if (perturb_ml_using_input_file) then
     call read_2d_ml_generated_file(tstd)
   else
+    pert_t = tg(:,:,:,previous) !initialise pert_t
     ! call ENNUF_2d_test_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), tstd) !takes in lowest level temperature and sphum and gives back tstd
-    call ENNUF_2d_T_RH_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), num_levels, pert_t, pert_rh) !takes in lowest level temperature and sphum and gives back tstd    
+    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
   endif
 
   if(id_pert_t > 0) used = send_data(id_pert_t, pert_t, Time)
