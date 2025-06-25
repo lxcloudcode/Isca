@@ -146,6 +146,10 @@ character(len=256) :: land_option = 'none'
 character(len=256) :: land_file_name  = 'INPUT/land.nc'
 character(len=256) :: land_field_name = 'land_mask'
 
+logical            :: read_sdor       = .false. ! Reading of standard deviation of orography off by default
+character(len=256) :: sdor_file_name  = 'INPUT/sdor.nc'
+character(len=256) :: sdor_field_name = 'sdor'
+
 ! Add bucket
 logical :: bucket = .false.
 integer :: future
@@ -170,7 +174,8 @@ namelist / idealized_moist_phys_nml / turb, lwet_convection, do_bm, do_ras, roug
                                       bucket, init_bucket_depth, init_bucket_depth_land, &
                                       max_bucket_depth_land, robert_bucket, raw_bucket, &
                                       do_socrates_radiation, do_lcl_diffusivity_depth, &
-                                      perturb_conv_with_ml, perturb_ml_using_input_file
+                                      perturb_conv_with_ml, perturb_ml_using_input_file, &
+                                      read_sdor, sdor_file_name, sdor_field_name
 
 
 integer, parameter :: num_time_levels = 2 ! Add bucket - number of time levels added to allow timestepping in this module
@@ -223,7 +228,8 @@ real, allocatable, dimension(:,:)   ::                                        &
      u_10m,                &   ! used for 10m winds and 2m temp
      v_10m,                &   ! used for 10m winds and 2m temp
      q_2m,                 &   ! used for 2m specific humidity
-     rh_2m                     ! used for 2m relative humidity
+     rh_2m,                &   ! used for 2m relative humidity
+     ptemp_2m                  ! used for 2m potential temperature
 
 real, allocatable, dimension(:,:,:) ::                                        &
      diff_m,               &   ! momentum diffusion coeff.
@@ -251,6 +257,9 @@ logical, allocatable, dimension(:,:) ::                                       &
 
 real, allocatable, dimension(:,:) ::                                          &
      land_ones                 ! land points (all zeros)
+
+real, allocatable, dimension(:,:) ::                                          &
+     sdor                      ! standard deviation of orography
 
 integer, allocatable, dimension(:,:) ::                                       &
      klzbs,                &   ! stored level of zero buoyancy values
@@ -303,6 +312,7 @@ integer ::           &
      id_v_10m,       & ! used for 10m winds and 2m temp
      id_q_2m,        & ! used for 2m specific humidity
      id_rh_2m,       & ! used for 2m relative humidity
+     id_ptemp_2m,    & ! used for 2m potential temperature
      id_pert_t,      &
      id_pert_q
 
@@ -519,8 +529,10 @@ allocate(u_10m       (is:ie, js:je))
 allocate(v_10m       (is:ie, js:je))
 allocate(q_2m        (is:ie, js:je))
 allocate(rh_2m       (is:ie, js:je))
+allocate(ptemp_2m    (is:ie, js:je))
 allocate(land        (is:ie, js:je)); land = .false.
 allocate(land_ones   (is:ie, js:je)); land_ones = 0.0
+allocate(sdor        (is:ie, js:je)); sdor = 0.0
 allocate(avail       (is:ie, js:je)); avail = .true.
 allocate(fracland    (is:ie, js:je)); fracland = 0.0
 allocate(rough       (is:ie, js:je))
@@ -604,6 +616,29 @@ elseif(trim(land_option) .eq. 'zsurf')then
     ! wherever zsurf is greater than some threshold height then make land = .true.
     where ( z_surf > 10. ) land = .true.
 endif
+
+if(read_sdor) then
+  if(file_exist(trim(sdor_file_name))) then
+      call mpp_get_global_domain(grid_domain, xsize=global_num_lon, ysize=global_num_lat)
+      call field_size(trim(sdor_file_name), trim(sdor_field_name), siz)
+      if ( siz(1) == global_num_lon .or. siz(2) == global_num_lat ) then
+          call read_data(trim(sdor_file_name), trim(sdor_field_name), sdor, grid_domain)
+          ! write something to screen to let the user know what's happening.
+      else
+          write(ctmp1(1: 4),'(i4)') siz(1)
+          write(ctmp1(9:12),'(i4)') siz(2)
+          write(ctmp2(1: 4),'(i4)') global_num_lon
+          write(ctmp2(9:12),'(i4)') global_num_lat
+          call error_mesg ('idealized_moist_phys','Land file contains data on a '// &
+                ctmp1//' grid, but atmos model grid is '//ctmp2, FATAL)
+      endif
+  else
+        call error_mesg('idealized_moist_phys', trim(sdor_file_name)//' does not exist', FATAL)
+  endif
+endif
+
+
+
 
 !option to alter surface roughness length over land
 if(trim(land_option) .eq. 'input') then
@@ -710,6 +745,8 @@ id_q_2m = register_diag_field(mod_name, 'sphum_2m',              &
      axes(1:2), Time, 'Specific humidity 2m above surface', 'kg/kg') 
 id_rh_2m = register_diag_field(mod_name, 'rh_2m',                &
      axes(1:2), Time, 'Relative humidity 2m above surface', 'percent')
+id_ptemp_2m = register_diag_field(mod_name, 'ptemp_2m',            &
+     axes(1:2), Time, 'Potential temperature 2m above surface', 'K')
 
 if(perturb_conv_with_ml) then
   id_pert_t = register_diag_field(mod_name, 'pert_t',        &
@@ -878,15 +915,19 @@ if (perturb_conv_with_ml) then
     call read_2d_ml_generated_file(tstd)
   else
     pert_t = tg(:,:,:,previous) !initialise pert_t
+    pert_q = grid_tracers(:,:,:,previous,nsphum) ! initialise pert_q
+
     ! call ENNUF_2d_test_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), tstd) !takes in lowest level temperature and sphum and gives back tstd
-    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
+
+    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), ptemp_2m, rh_2m, sdor, z_surf*grav, temp_2m, u_10m, v_10m, num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
+
   endif
 
   if(id_pert_t > 0) used = send_data(id_pert_t, pert_t, Time)
   if(id_pert_q > 0) used = send_data(id_pert_q, pert_q, Time)  
 else
   pert_t = tg(:,:,:,previous)
-
+  pert_q = grid_tracers(:,:,:,previous,nsphum) 
 endif
 
 rain = 0.0; snow = 0.0; precip = 0.0; klcls = 0
@@ -896,9 +937,9 @@ select case(r_conv_scheme)
 
 case(SIMPLE_BETTS_CONV)
 
-   call qe_moist_convection ( delta_t,              pert_t,      &
-   grid_tracers(:,:,:,previous,nsphum),        p_full(:,:,:,previous),      &
-                          p_half(:,:,:,previous),                coldT,      &
+   call qe_moist_convection ( delta_t,                          pert_t,      &
+                               pert_q,          p_full(:,:,:,previous),      &
+               p_half(:,:,:,previous),                           coldT,      &
                                  rain,                            snow,      &
                            conv_dt_tg,                      conv_dt_qg,      &
                                 q_ref,                        convflag,      &
@@ -1163,6 +1204,7 @@ if(.not.gp_surface) then
                                    v_10m(:,:),                              &
                                     q_2m(:,:),                              &
                                    rh_2m(:,:),                              &
+                                ptemp_2m(:,:),                              &                                   
                                       delta_t,                              &
                                     land(:,:),                              &
                                .not.land(:,:),                              &
@@ -1175,17 +1217,9 @@ if(.not.gp_surface) then
   if(id_v_10m > 0) used = send_data(id_v_10m, v_10m, Time)
   if(id_q_2m > 0) used = send_data(id_q_2m, q_2m, Time)
   if(id_rh_2m > 0) used = send_data(id_rh_2m, rh_2m*1e2, Time)
+  if(id_ptemp_2m > 0) used = send_data(id_ptemp_2m, ptemp_2m, Time)
 
 endif
-
-! 10m winds and 2m temperature add mo_profile()
-
-if(id_temp_2m > 0) used = send_data(id_temp_2m, temp_2m, Time) ! 2m temp
-if(id_u_10m > 0) used = send_data(id_u_10m, u_10m, Time)       ! 10m wind (u)
-if(id_v_10m > 0) used = send_data(id_v_10m, v_10m, Time)       ! 10m wind (v)
-
-if(id_q_2m > 0) used = send_data(id_q_2m, q_2m, Time)         ! Add 2m humidity
-if(id_rh_2m > 0) used = send_data(id_rh_2m, rh_2m*1e2, Time)  ! Add 2m humidity
 
 ! Now complete the radiation calculation by computing the upward and net fluxes.
 

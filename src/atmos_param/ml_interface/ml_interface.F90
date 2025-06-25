@@ -16,6 +16,7 @@ use interpolator_mod, only: interpolate_type,interpolator_init&
 use ennuf_example_mod, only: example_ml_model
 use ENNUF_RH_mod, only: ENNUF_RH_model
 use ENNUF_Th_mod, only: ENNUF_Th_model
+use constants_mod, only: RVGAS, HLV
 
 implicit none
 private
@@ -175,53 +176,73 @@ function rnorm() result( fn_val )
 return
 end function rnorm
 
-subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, pert_t, pert_q)
+subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, ptemp_2m, rh_2m, sdor, surf_geopot, temp_2m, u_10m, v_10m, num_levels, p_full, p_half, pert_t, pert_q)
 
     real, dimension(:,:,:), intent(in)     :: temp_in, q_in
-    real, dimension(:,:,:), intent(in) :: p_full, p_half
-    integer, intent(in)                  :: num_levels    
+    real, dimension(:,:),   intent(in)     :: ptemp_2m, rh_2m, sdor, surf_geopot, temp_2m, u_10m, v_10m
+    real, dimension(:,:,:), intent(in)     :: p_full, p_half
+    integer, intent(in)                    :: num_levels    
     real, dimension(:,:,:), intent(out)    :: pert_t, pert_q
 
 
     integer :: i, j, z_tick
+    real, dimension(size(temp_in,1), size(temp_in, 2))    :: tdewpoint_2m
     real, dimension(size(temp_in,1), size(temp_in, 2), 6) :: Th_predictors
     real, dimension(size(temp_in,1), size(temp_in, 2), 7) :: RH_predictors
-    real(kind=4), dimension(size(temp_in,1), size(temp_in, 2)) :: Th_outputs, RH_outputs, RHstd, Thstd, random_num_theta, random_num_rh
+    real(kind=4), dimension(size(temp_in,1), size(temp_in, 2)) :: Th_outputs, RH_outputs, qstd, Tstd, random_num_theta, random_num_rh
+
+    real :: ptemp_2m_mean, ptemp_2m_std, rh2_mean, rh2_std, sdor_mean, sdor_std, surf_geopot_mean, surf_geopot_std, wind_10m_mean, wind_10m_std, &
+            tdewpoint_2m_mean, tdewpoint_2m_std, temp_2m_mean, temp_2m_std, surf_p_mean, surf_p_std
 
     if(.not.module_is_initialized) then
         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
     endif
 
-    !TODO:
-    !Need to add normalise input data here
-    !Need to correct the inputs to the network (rather than 1 2 3 etc)
+    ptemp_2m_mean    = 281.92596
+    ptemp_2m_std     = 17.551208
+    rh2_mean         = 74.51201 / 100.
+    rh2_std          = 14.990538 / 100.
+    sdor_mean        = 20.685488
+    sdor_std         = 45.847626
+    surf_geopot_mean = 3613.3135
+    surf_geopot_std  = 7890.1587
+    wind_10m_mean    = 5.9862623
+    wind_10m_std     = 3.5270183
+    tdewpoint_2m_mean= 274.4919
+    tdewpoint_2m_std = 20.493927
+    temp_2m_mean     = 279.14786
+    temp_2m_std      = 21.044209
+    surf_p_mean      = 96789.875
+    surf_p_std       = 9142.519
+
+    tdewpoint_2m = temp_2m / (1. - ((RVGAS/HLV)*temp_2m*log(rh_2m)))
 
     do i = 1, size(temp_in,1)
         do j = 1, size(temp_in,2)    
 
-            RH_predictors(i,j,1) = 1.0 !temp_in(i,j,num_levels)
-            RH_predictors(i,j,2) = 2.0 !temp_in(i,j,num_levels)
-            RH_predictors(i,j,3) = 3.0 !q_in(i,j,num_levels)
-            RH_predictors(i,j,4) = 4.0 !q_in(i,j,num_levels)
-            RH_predictors(i,j,5) = 4.0 !q_in(i,j,num_levels)
-            RH_predictors(i,j,6) = 4.0 !q_in(i,j,num_levels)
-            RH_predictors(i,j,7) = 4.0 !q_in(i,j,num_levels)                                    
+            RH_predictors(i,j,1) = (ptemp_2m(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
+            RH_predictors(i,j,2) = (rh_2m(i,j)-rh2_mean)/rh2_std !RH2
+            RH_predictors(i,j,3) = (sdor(i,j)-sdor_mean)/sdor_std !sdor
+            RH_predictors(i,j,4) = (surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
+            RH_predictors(i,j,5) = (tdewpoint_2m(i,j)-tdewpoint_2m_mean)/tdewpoint_2m_std !2m dew-point temperature
+            RH_predictors(i,j,6) = (temp_2m(i,j)-temp_2m_mean)/temp_2m_std !2m temperature
+            RH_predictors(i,j,7) = (p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
 
             call ENNUF_RH_model(real(RH_predictors(i,j,:),4), RH_outputs(i,j))
 
-            RHstd(i,j) = RH_outputs(i,j)
+            qstd(i,j) = RH_outputs(i,j)
 
 
-            Th_predictors(i,j,1) = 1.0 !temp_in(i,j,num_levels)
-            Th_predictors(i,j,2) = 2.0 !temp_in(i,j,num_levels)
-            Th_predictors(i,j,3) = 3.0 !q_in(i,j,num_levels)
-            Th_predictors(i,j,4) = 4.0 !q_in(i,j,num_levels)
-            Th_predictors(i,j,5) = 4.0 !q_in(i,j,num_levels)
-            Th_predictors(i,j,6) = 4.0 !q_in(i,j,num_levels)
+            Th_predictors(i,j,1) = (ptemp_2m(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
+            Th_predictors(i,j,2) = (rh_2m(i,j)-rh2_mean)/rh2_std !RH2
+            Th_predictors(i,j,3) = (sdor(i,j)-sdor_mean)/sdor_std !sdor
+            Th_predictors(i,j,4) = (surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
+            Th_predictors(i,j,5) = (p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
+            Th_predictors(i,j,6) = (sqrt(u_10m(i,j)**2 + v_10m(i,j)**2)-wind_10m_mean)/wind_10m_std !10m wind speed
 
             call ENNUF_Th_model(real(Th_predictors(i,j,:),4), Th_outputs(i,j))
 
-            Thstd(i,j) = Th_outputs(i,j)
+            Tstd(i,j) = Th_outputs(i,j)
 
             ! make sure random number is drawn from normal distribution with mean of 0 and std of 1. And now clip it between -3 and 3 standard deviations.
             random_num_theta(i,j) = MIN(rnorm(), 3.0)
@@ -230,21 +251,21 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, num_levels, p_full, p_half, p
             random_num_rh(i,j)    = MAX(random_num_rh(i,j), -3.0)
 
 
-            write(6,*) RHstd(i,j), Thstd(i,j), random_num_theta(i,j), random_num_rh(i,j)
+            write(6,*) qstd(i,j), Tstd(i,j), random_num_theta(i,j), random_num_rh(i,j)
 
         enddo
     enddo
 
-
     !TODO:
-    !Need to add redimensionalisation here
     !Need to think about how to go from predictions of theta and RH to perturbing T and q
-    !Need to clip T and q perturbations so that they're not crazy big
 
   do z_tick=1, num_levels
-    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + random_num_theta* Thstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
-    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*    RHstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + random_num_theta* Tstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+    pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*    qstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   enddo
+
+    !Need to clip T and q perturbations so that they're not crazy big
+
 
 end subroutine ENNUF_2d_T_RH_prediction
 
