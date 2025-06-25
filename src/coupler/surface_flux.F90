@@ -349,7 +349,7 @@ subroutine surface_flux_1d (                                           &
      dhdt_atm,  dedq_atm,   dtaudu_atm, dtaudv_atm,                    &
      ex_del_m, ex_del_h, ex_del_q,                                     &
      temp_2m, u_10m, v_10m,                                            &
-     q_2m, rh_2m,                                                      &
+     q_2m, rh_2m, ptemp_2m,                                            &
      dt,        land,      seawater,     avail  )
 !</PUBLICROUTINE>
 !  slm Mar 28 2002 -- remove agument drag_q since it is just cd_q*wind
@@ -370,7 +370,7 @@ subroutine surface_flux_1d (                                           &
        cd_m,      cd_t,       cd_q,                          & 
        ex_del_m, ex_del_h, ex_del_q,                         &
        temp_2m, u_10m, v_10m,                                &
-       q_2m, rh_2m
+       q_2m, rh_2m, ptemp_2m
 
 
   real, intent(inout), dimension(:) :: q_surf
@@ -459,7 +459,7 @@ subroutine surface_flux_1d (                                           &
      p_ratio = (p_surf/p_atm)**kappa
 
      tv_atm  = t_atm  * (1.0 + d608*q_atm)     ! virtual temperature
-     th_atm  = t_atm  * p_ratio                ! potential T, using p_surf as refernce
+     th_atm  = t_atm  * p_ratio                ! potential T, using p_surf as reference
      thv_atm = tv_atm * p_ratio                ! virt. potential T, using p_surf as reference
      thv_surf= t_surf0 * (1.0 + d608*q_surf0 ) ! surface virtual (potential) T
 !     thv_surf= t_surf0                        ! surface virtual (potential) T -- just for testing tun off the q_surf
@@ -520,6 +520,10 @@ subroutine surface_flux_1d (                                           &
      !    ------- reference temp -----------
         where (avail) &
            temp_2m = t_surf + (t_atm - t_surf) * ex_del_h !t_ca = canopy temperature, assuming that there is no canopy (no difference between land and ocean), t_ca = t_surf
+
+     !    ------- reference ptemp -----------
+        where (avail) &
+           ptemp_2m = (t_surf*(p_ref/p_surf)**kappa) + ((t_atm*(p_ref/p_atm)**kappa) - (t_surf*(p_ref/p_surf)**kappa)) * ex_del_h 
 
      !    ------- reference u comp -----------
         where (avail) &
@@ -711,7 +715,7 @@ subroutine surface_flux_0d (                                                 &
      dhdt_atm_0,  dedq_atm_0,   dtaudu_atm_0, dtaudv_atm_0,                  &
      ex_del_m_0, ex_del_h_0, ex_del_q_0,                                     &
      temp_2m_0, u_10m_0, v_10m_0,                                            &
-     q_2m_0, rh_2m_0,                                                        &
+     q_2m_0, rh_2m_0, ptemp_2m_0,                                            &
      dt,          land_0,       seawater_0,  avail_0  )
 
   ! ---- arguments -----------------------------------------------------------
@@ -729,7 +733,7 @@ subroutine surface_flux_0d (                                                 &
        cd_m_0,      cd_t_0,       cd_q_0,                              &
        ex_del_m_0, ex_del_h_0, ex_del_q_0,                             &
        temp_2m_0, u_10m_0, v_10m_0,                                    &
-       q_2m_0, rh_2m_0
+       q_2m_0, rh_2m_0, ptemp_2m_0
   real, intent(inout) :: q_surf_0
   real, intent(in)    :: dt
 
@@ -749,7 +753,7 @@ subroutine surface_flux_0d (                                                 &
        cd_m,      cd_t,       cd_q,                          &
        ex_del_m, ex_del_h, ex_del_q,                         &
        temp_2m, u_10m, v_10m,                                &
-       q_2m, rh_2m
+       q_2m, rh_2m, ptemp_2m
 
   real, dimension(1) :: q_surf
   real, dimension(1) :: bucket_depth
@@ -794,7 +798,7 @@ subroutine surface_flux_0d (                                                 &
        dhdt_atm,  dedq_atm,   dtaudu_atm, dtaudv_atm,                    &
        ex_del_m, ex_del_h, ex_del_q,                                     &
        temp_2m, u_10m, v_10m,                                            &
-       q_2m, rh_2m,                                                      &
+       q_2m, rh_2m, ptemp_2m,                                            &
        dt,        land,      seawater, avail  )
 
   flux_t_0     = flux_t(1)
@@ -826,6 +830,8 @@ subroutine surface_flux_0d (                                                 &
   v_10m_0      = v_10m(1)
   q_2m_0       = q_2m(1)
   rh_2m_0      = rh_2m(1)
+  ptemp_2m_0   = ptemp_2m(1)
+
 
 end subroutine surface_flux_0d
 
@@ -843,7 +849,7 @@ subroutine surface_flux_2d (                                           &
      dhdt_atm,  dedq_atm,   dtaudu_atm, dtaudv_atm,                    &
      ex_del_m, ex_del_h, ex_del_q,                                     &
      temp_2m, u_10m, v_10m,                                            &
-     q_2m, rh_2m,                                                      &
+     q_2m, rh_2m, ptemp_2m,                                            &
      dt,        land,       seawater,  avail  )
 
   ! ---- arguments -----------------------------------------------------------
@@ -861,7 +867,7 @@ subroutine surface_flux_2d (                                           &
        cd_m,      cd_t,       cd_q,                          &
        ex_del_m, ex_del_h, ex_del_q,                         &
        temp_2m, u_10m, v_10m,                                &
-       q_2m, rh_2m
+       q_2m, rh_2m, ptemp_2m
 
   real, intent(inout), dimension(:,:) :: q_surf
   logical, intent(in) :: bucket
@@ -889,7 +895,7 @@ subroutine surface_flux_2d (                                           &
           dhdt_atm(:,j),  dedq_atm(:,j),   dtaudu_atm(:,j), dtaudv_atm(:,j),                              &
           ex_del_m(:,j), ex_del_h(:,j), ex_del_q(:,j),                                                    &
           temp_2m(:,j), u_10m(:,j), v_10m(:,j),                                                           &
-          q_2m(:,j), rh_2m(:,j),                                                                          &
+          q_2m(:,j), rh_2m(:,j), ptemp_2m(:,j),                                                           &
           dt,             land(:,j),       seawater(:,j),  avail(:,j)  )
   end do
 end subroutine surface_flux_2d
