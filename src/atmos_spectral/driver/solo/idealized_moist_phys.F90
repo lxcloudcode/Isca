@@ -314,7 +314,9 @@ integer ::           &
      id_rh_2m,       & ! used for 2m relative humidity
      id_ptemp_2m,    & ! used for 2m potential temperature
      id_pert_t,      &
-     id_pert_q
+     id_pert_q,      &
+     id_no_pert_t,   &
+     id_no_pert_q   
 
 integer, allocatable, dimension(:,:) :: convflag ! indicates which qe convection subroutines are used
 real,    allocatable, dimension(:,:) :: rad_lat, rad_lon
@@ -753,6 +755,10 @@ if(perturb_conv_with_ml) then
     axes(1:3), Time, 'Perturbation profile of temperature','K')
   id_pert_q = register_diag_field(mod_name, 'pert_q',        &
     axes(1:3), Time, 'Perturbation profile of specific humidity','kg/kg')
+  id_no_pert_t = register_diag_field(mod_name, 'no_pert_t',        &
+    axes(1:3), Time, 'No perturbation profile of temperature','K')
+  id_no_pert_q = register_diag_field(mod_name, 'no_pert_q',        &
+    axes(1:3), Time, 'No perturbation profile of specific humidity','kg/kg')    
 endif
 
 select case(r_conv_scheme)
@@ -868,7 +874,7 @@ endif
 
 if (perturb_conv_with_ml) then
 
-    call ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_ml_using_input_file)
+    call ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_ml_using_input_file, Time)
 
 endif
 
@@ -911,14 +917,16 @@ if (bucket) then
 endif
 
 if (perturb_conv_with_ml) then
+  pert_t = tg(:,:,:,previous) !initialise pert_t
+  pert_q = grid_tracers(:,:,:,previous,nsphum) ! initialise pert_q
+
+  if(id_no_pert_t > 0) used = send_data(id_no_pert_t, pert_t, Time)
+  if(id_no_pert_q > 0) used = send_data(id_no_pert_q, pert_q, Time)  
+
   if (perturb_ml_using_input_file) then
     call read_2d_ml_generated_file(tstd)
   else
-    pert_t = tg(:,:,:,previous) !initialise pert_t
-    pert_q = grid_tracers(:,:,:,previous,nsphum) ! initialise pert_q
-
-    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), ug(:,:,:,previous), vg(:,:,:,previous), t_surf, q_surf, u_surf, v_surf, rough_mom, rough_heat, rough_moist, rough_mom, gust, bucket_depth(:,:,current),  land(:,:), .not.land(:,:), avail, ptemp_2m, rh_2m, sdor, z_surf*grav, temp_2m, u_10m, v_10m, num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), z_full(:,:,:,current), z_surf, pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
-
+    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), ug(:,:,:,previous), vg(:,:,:,previous), t_surf, q_surf, u_surf, v_surf, rough_mom, rough_heat, rough_moist, rough_mom, gust, bucket_depth(:,:,current),  land(:,:), .not.land(:,:), avail, Time, ptemp_2m, rh_2m, sdor, z_surf*grav, temp_2m, u_10m, v_10m, num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), z_full(:,:,:,current), z_surf, pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
   endif
 
   if(id_pert_t > 0) used = send_data(id_pert_t, pert_t, Time)

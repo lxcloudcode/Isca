@@ -20,6 +20,9 @@ use constants_mod, only: cp_air, hlv, stefan, rdgas, rvgas, grav, vonkarm, dens_
 use sat_vapor_pres_mod, only: lookup_es ! needed for relative humdity to be converted to q
 use   monin_obukhov_mod, only: mo_drag, mo_profile
 use  sat_vapor_pres_mod, only: escomp, descomp
+use        diag_manager_mod, only: register_diag_field, send_data
+use   spectral_dynamics_mod, only: get_axis_id
+use        time_manager_mod, only: time_type
 
 implicit none
 private
@@ -30,7 +33,7 @@ character(len=128) :: version= &
 
 character(len=128) :: tagname= &
 '$Name:  $'
-character(len=10), parameter :: mod_name='ml_interface'
+character(len=15), parameter :: mod_name='ml_interface'
 
 !=================================================================================================================================
 
@@ -40,7 +43,7 @@ character(len=256) :: conv_input_file  = 'ml_input'
 character(len=256) :: tstd_field_name = 'tstd' 
 character(len=256) :: qstd_field_name = 'qstd' 
 logical :: alt_gustiness         = .false.
-logical :: bucket = .false.
+logical :: bucket = .true.
 logical :: raoult_sat_vap        = .false.
 logical :: do_simple             = .false.
 real    :: gust_const            =  1.0
@@ -57,16 +60,24 @@ logical :: module_is_initialized =.false.
 type(interpolate_type),save :: conv_input_file_interp
 real :: d622, d378, hlars, gcp, kappa, d608
 
+integer ::           &
+     id_theta_std,  &   ! predicted theta std
+     id_t_std,  &   ! predicted t std     
+     id_RH_std,  &   ! predicted theta std
+     id_q_std   ! predicted t std     
+
+integer, dimension(4) :: axes
 
 contains
 
 
-subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_ml_using_input_file)
+subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_ml_using_input_file, Time)
     
     real, intent(in), dimension(:,:) :: rad_lonb_2d, rad_latb_2d
     integer, intent(in) :: is, ie, js, je
     logical, intent(in) :: perturb_ml_using_input_file
     integer :: nml_unit, ierr, io, nseed
+    type(time_type) :: Time
 
     if(module_is_initialized) return
 
@@ -97,6 +108,17 @@ subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_m
     gcp    = grav/cp_air
     kappa  = rdgas/cp_air
     d608   = d378/d622
+
+  axes = get_axis_id()
+
+  id_theta_std = register_diag_field(mod_name, 'theta_std_ml', &
+                    axes(1:2), Time, 'predicted std of Theta from ML', 'K')
+  id_t_std = register_diag_field(mod_name, 't_std_ml', &
+                    axes(1:2), Time, 'predicted std of T from ML', 'K')
+  id_RH_std = register_diag_field(mod_name, 'RH_std_ml', &
+                    axes(1:2), Time, 'predicted std of RH from ML', 'percent')
+  id_q_std = register_diag_field(mod_name, 'q_std_ml', &
+                    axes(1:2), Time, 'predicted std of sphum from ML', 'kg/kg')                                                            
 
     module_is_initialized=.true.
 
@@ -198,7 +220,7 @@ function rnorm() result( fn_val )
 return
 end function rnorm
 
-subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf_in, u_surf_in, v_surf_in, rough_mom, rough_heat, rough_moist, rough_scale, gust, bucket_depth_in, land, seawater, avail_in, ptemp_2m, rh_2m, sdor, surf_geopot, temp_2m, u_10m, v_10m, num_levels, p_full, p_half, z_full, z_surf, pert_t, pert_q)
+subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf_in, u_surf_in, v_surf_in, rough_mom, rough_heat, rough_moist, rough_scale, gust, bucket_depth_in, land, seawater, avail_in, Time, ptemp_2m, rh_2m, sdor, surf_geopot, temp_2m, u_10m, v_10m, num_levels, p_full, p_half, z_full, z_surf, pert_t, pert_q)
 
     real, dimension(:,:,:), intent(in)     :: temp_in, q_in, u_in, v_in
     real, dimension(:,:),   intent(in)     :: ptemp_2m, rh_2m, sdor, surf_geopot, temp_2m, u_10m, v_10m, z_surf, t_surf_in, q_surf_in, u_surf_in, v_surf_in
@@ -206,6 +228,7 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
     real, dimension(:,:,:), intent(in)     :: p_full, p_half, z_full
     integer, intent(in)                    :: num_levels    
     logical, dimension(:,:), intent(in)    :: land, seawater, avail_in
+    type(time_type),            intent(in) :: Time
     real, dimension(:,:,:), intent(out)    :: pert_t, pert_q
 
 
@@ -218,7 +241,9 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
     real(kind=4), dimension(size(temp_in,1), size(temp_in, 2)) :: Th_outputs, RH_outputs, qstd, Tstd, random_num_theta, random_num_rh
 
     real :: ptemp_2m_mean, ptemp_2m_std, rh2_mean, rh2_std, sdor_mean, sdor_std, surf_geopot_mean, surf_geopot_std, wind_10m_mean, wind_10m_std, &
-            tdewpoint_2m_mean, tdewpoint_2m_std, temp_2m_mean, temp_2m_std, surf_p_mean, surf_p_std
+            tdewpoint_2m_mean, tdewpoint_2m_std, temp_2m_mean, temp_2m_std, surf_p_mean, surf_p_std, test_input_value
+
+    logical :: used
 
     if(.not.module_is_initialized) then
         call error_mesg('ml_interface','ml_interface module is not initialized',FATAL)
@@ -261,28 +286,33 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
     CALL LOOKUP_ES(temp_2m_sv, es_2m)  !find saturation vapor pressure
     q_sat = d622 * es_2m / (p_half(i,j,num_levels+1) - d378*es_2m)
 
+    Th_outputs = 0.
+    RH_outputs = 0.
+
+    test_input_value = 0.2
+
     do i = 1, size(temp_in,1)
         do j = 1, size(temp_in,2)    
 
-            RH_predictors(i,j,1) = (ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
-            RH_predictors(i,j,2) = (rh_2m_sv(i,j)-rh2_mean)/rh2_std !RH2
-            RH_predictors(i,j,3) = (sdor(i,j)-sdor_mean)/sdor_std !sdor
-            RH_predictors(i,j,4) = (surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
-            RH_predictors(i,j,5) = (tdewpoint_2m(i,j)-tdewpoint_2m_mean)/tdewpoint_2m_std !2m dew-point temperature
-            RH_predictors(i,j,6) = (temp_2m_sv(i,j)-temp_2m_mean)/temp_2m_std !2m temperature
-            RH_predictors(i,j,7) = (p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
+            RH_predictors(i,j,1) = 0.15!test_input_value!(ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
+            RH_predictors(i,j,2) = -0.03!test_input_value!(rh_2m_sv(i,j)-rh2_mean)/rh2_std !RH2
+            RH_predictors(i,j,3) = 0.07!test_input_value!(sdor(i,j)-sdor_mean)/sdor_std !sdor
+            RH_predictors(i,j,4) = -0.11!test_input_value!(surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
+            RH_predictors(i,j,5) = 0.01!test_input_value!(tdewpoint_2m(i,j)-tdewpoint_2m_mean)/tdewpoint_2m_std !2m dew-point temperature
+            RH_predictors(i,j,6) = -0.09!test_input_value!(temp_2m_sv(i,j)-temp_2m_mean)/temp_2m_std !2m temperature
+            RH_predictors(i,j,7) = 0.17!test_input_value!(p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
 
             call ENNUF_RH_model(real(RH_predictors(i,j,:),4), RH_outputs(i,j))
 
             qstd(i,j) = RH_outputs(i,j)*q_sat(i,j)
 
 
-            Th_predictors(i,j,1) = (ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
-            Th_predictors(i,j,2) = (rh_2m_sv(i,j)-rh2_mean)/rh2_std !RH2
-            Th_predictors(i,j,3) = (sdor(i,j)-sdor_mean)/sdor_std !sdor
-            Th_predictors(i,j,4) = (surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
-            Th_predictors(i,j,5) = (p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
-            Th_predictors(i,j,6) = (sqrt(u_10m_sv(i,j)**2 + v_10m_sv(i,j)**2)-wind_10m_mean)/wind_10m_std !10m wind speed
+            Th_predictors(i,j,1) = 0.15!test_input_value!(ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
+            Th_predictors(i,j,2) = -0.03!test_input_value!(rh_2m_sv(i,j)-rh2_mean)/rh2_std !RH2
+            Th_predictors(i,j,3) = 0.07!test_input_value!(sdor(i,j)-sdor_mean)/sdor_std !sdor
+            Th_predictors(i,j,4) = -0.11!test_input_value!(surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
+            Th_predictors(i,j,5) = 0.01!test_input_value!(p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
+            Th_predictors(i,j,6) = -0.09!test_input_value!(sqrt(u_10m_sv(i,j)**2 + v_10m_sv(i,j)**2)-wind_10m_mean)/wind_10m_std !10m wind speed
 
             call ENNUF_Th_model(real(Th_predictors(i,j,:),4), Th_outputs(i,j))
 
@@ -295,10 +325,17 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
             random_num_rh(i,j)    = MAX(random_num_rh(i,j), -3.0)
 
 
-            ! write(6,*) qstd(i,j), Tstd(i,j), random_num_theta(i,j), random_num_rh(i,j)
+            write(6,*) RH_outputs(i,j), TH_outputs(i,j), qstd(i,j), Tstd(i,j)
 
         enddo
     enddo
+
+  write(6,*) 'maxvals = ', maxval(RH_outputs), minval(RH_outputs), maxval(Th_outputs), minval(Th_outputs)
+
+  if(id_theta_std > 0) used = send_data(id_theta_std, real(Th_outputs,8), Time)
+  if(id_t_std > 0)     used = send_data(id_t_std, real(Tstd,8), Time)
+  if(id_RH_std > 0)    used = send_data(id_theta_std, real(RH_outputs*100.,8), Time)
+  if(id_q_std > 0)     used = send_data(id_t_std, real(qstd,8), Time)
 
   pert_t(:,:,:) = temp_in(:,:,:)
   pert_q(:,:,:) = q_in(:,:,:)
@@ -308,8 +345,8 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
   !   pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*    qstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   ! enddo
 
-    pert_t(:,:,num_levels) = pert_t(:,:,num_levels) + 0.001*random_num_theta* Tstd
-    pert_q(:,:,num_levels) = pert_q(:,:,num_levels) + 0.001*random_num_theta* qstd    
+    pert_t(:,:,num_levels) = pert_t(:,:,num_levels) + 0.001*real(random_num_theta* Tstd,8)
+    pert_q(:,:,num_levels) = pert_q(:,:,num_levels) + 0.001*real(random_num_theta* qstd,8)
 
     !Need to clip T and q perturbations so that they're not crazy big
 
