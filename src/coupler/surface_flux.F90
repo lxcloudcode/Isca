@@ -39,7 +39,7 @@ use             fms_mod, only: FATAL, close_file, mpp_pe, mpp_root_pe, write_ver
 use             fms_mod, only: file_exist, check_nml_error, open_namelist_file, stdlog
 use   monin_obukhov_mod, only: mo_drag, mo_profile
 use  sat_vapor_pres_mod, only: escomp, descomp
-use       constants_mod, only: cp_air, hlv, stefan, rdgas, rvgas, grav, vonkarm, dens_h2o
+use       constants_mod, only: cp_air, hlv, stefan, rdgas, rvgas, grav, vonkarm, dens_h2o, PSTD_MKS
 use             mpp_mod, only: input_nml_file
 
 implicit none
@@ -523,7 +523,7 @@ subroutine surface_flux_1d (                                           &
 
      !    ------- reference ptemp -----------
         where (avail) &
-           ptemp_2m = (t_surf*(p_ref/p_surf)**kappa) + ((t_atm*(p_ref/p_atm)**kappa) - (t_surf*(p_ref/p_surf)**kappa)) * ex_del_h 
+           ptemp_2m = (t_surf*(PSTD_MKS/p_surf)**kappa) + ((t_atm*(PSTD_MKS/p_atm)**kappa) - (t_surf*(PSTD_MKS/p_surf)**kappa)) * ex_del_h 
 
      !    ------- reference u comp -----------
         where (avail) &

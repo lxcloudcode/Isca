@@ -917,9 +917,7 @@ if (perturb_conv_with_ml) then
     pert_t = tg(:,:,:,previous) !initialise pert_t
     pert_q = grid_tracers(:,:,:,previous,nsphum) ! initialise pert_q
 
-    ! call ENNUF_2d_test_prediction(tg(:,:,num_levels,previous), grid_tracers(:,:,num_levels,previous,nsphum), tstd) !takes in lowest level temperature and sphum and gives back tstd
-
-    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), ptemp_2m, rh_2m, sdor, z_surf*grav, temp_2m, u_10m, v_10m, num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
+    call ENNUF_2d_T_RH_prediction(tg(:,:,:,previous), grid_tracers(:,:,:,previous,nsphum), ug(:,:,:,previous), vg(:,:,:,previous), t_surf, q_surf, u_surf, v_surf, rough_mom, rough_heat, rough_moist, rough_mom, gust, bucket_depth(:,:,current),  land(:,:), .not.land(:,:), avail, ptemp_2m, rh_2m, sdor, z_surf*grav, temp_2m, u_10m, v_10m, num_levels, p_full(:,:,:,previous), p_half(:,:,:,previous), z_full(:,:,:,current), z_surf, pert_t, pert_q) !takes in inputs for ENNUF NN and gives back perturbed versions of T and q. 
 
   endif
 
