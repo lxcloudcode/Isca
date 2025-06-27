@@ -64,7 +64,16 @@ integer ::           &
      id_theta_std,  &   ! predicted theta std
      id_t_std,  &   ! predicted t std     
      id_RH_std,  &   ! predicted theta std
-     id_q_std   ! predicted t std     
+     id_q_std, &   ! predicted t std     
+     id_q_2m_sv, &
+     id_rh_2m_sv, &
+     id_dew_2m_sv, &          
+     id_temp_2m_sv, &     
+     id_ptemp_2m_sv, &
+     id_es_2m_sv,    &
+     id_qsat_2m_sv,  &
+     id_RH_lml_sv, &
+     id_sdor    
 
 integer, dimension(4) :: axes
 
@@ -119,6 +128,26 @@ subroutine ml_interface_init(is, ie, js, je, rad_lonb_2d, rad_latb_2d, perturb_m
                     axes(1:2), Time, 'predicted std of RH from ML', 'percent')
   id_q_std = register_diag_field(mod_name, 'q_std_ml', &
                     axes(1:2), Time, 'predicted std of sphum from ML', 'kg/kg')                                                            
+
+  id_q_2m_sv = register_diag_field(mod_name, 'q_2m_sv', &
+                    axes(1:2), Time, 'q 2m from ml-interface', 'kg/kg')    
+  id_rh_2m_sv = register_diag_field(mod_name, 'rh_2m_sv', &
+                    axes(1:2), Time, 'rh 2m from ml-interface', 'percent')                                           
+  id_dew_2m_sv = register_diag_field(mod_name, 'dew_2m_sv', &
+                    axes(1:2), Time, 'dew point 2m from ml-interface', 'K')     
+  id_temp_2m_sv = register_diag_field(mod_name, 'temp_2m_sv', &
+                    axes(1:2), Time, 'temp point 2m from ml-interface', 'K')   
+  id_ptemp_2m_sv = register_diag_field(mod_name, 'ptemp_2m_sv', &
+                    axes(1:2), Time, 'ptemp point 2m from ml-interface', 'K')                       
+
+  id_es_2m_sv = register_diag_field(mod_name, 'es_2m_sv', &
+                    axes(1:2), Time, 'es 2m from ml-interface', 'Pa')                       
+  id_qsat_2m_sv = register_diag_field(mod_name, 'qsat_2m_sv', &
+                    axes(1:2), Time, 'qsat 2m from ml-interface', 'kg/kg')   
+  id_rh_lml_sv = register_diag_field(mod_name, 'rh_lml_sv', &
+                    axes(1:2), Time, 'rh lowest model level from ml-interface', 'percent')     
+  id_sdor = register_diag_field(mod_name, 'sdor', &
+                    axes(1:2), Time, 'sdor', 'm')                                          
 
     module_is_initialized=.true.
 
@@ -234,7 +263,7 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
 
     integer :: i, j, z_tick
     real, dimension(size(temp_in,1), size(temp_in, 2))    :: tdewpoint_2m, q_sat, es_2m
-    real, dimension(size(temp_in,1), size(temp_in, 2))    :: temp_2m_sv, u_10m_sv, v_10m_sv, q_2m_sv, rh_2m_sv, ptemp_2m_sv
+    real, dimension(size(temp_in,1), size(temp_in, 2))    :: temp_2m_sv, u_10m_sv, v_10m_sv, q_2m_sv, rh_2m_sv, ptemp_2m_sv, RH_lml
 
     real, dimension(size(temp_in,1), size(temp_in, 2), 6) :: Th_predictors
     real, dimension(size(temp_in,1), size(temp_in, 2), 7) :: RH_predictors
@@ -271,10 +300,9 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
                                   p_half(:,:,num_levels+1),    t_surf_in(:,:),     t_surf_in(:,:),      q_surf_in(:,:), u_surf_in,    v_surf_in,      &
                                   rough_mom, rough_heat, rough_moist, rough_scale, gust, bucket_depth_in, land, seawater, avail_in,        &                          
                                   temp_2m_sv, u_10m_sv, v_10m_sv,                                            &
-                                  q_2m_sv, rh_2m_sv, ptemp_2m_sv)
+                                  q_2m_sv, rh_2m_sv, ptemp_2m_sv, RH_lml)
 
-
-    tdewpoint_2m = temp_2m_sv / (1. - ((RVGAS/HLV)*temp_2m_sv*log(rh_2m_sv)))
+    tdewpoint_2m = temp_2m_sv / (1. - ((RVGAS/HLV)*temp_2m_sv*log(RH_lml)))
 
     ! write(6,*) MAXVAL(temp_2m), MINVAL(temp_2m), MAXVAL(temp_2m_sv), MINVAL(temp_2m_sv)
     ! write(6,*) MAXVAL(ptemp_2m), MINVAL(ptemp_2m), MAXVAL(ptemp_2m_sv), MINVAL(ptemp_2m_sv)
@@ -289,30 +317,30 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
     Th_outputs = 0.
     RH_outputs = 0.
 
-    test_input_value = 0.2
+    test_input_value = 0.1
 
     do i = 1, size(temp_in,1)
         do j = 1, size(temp_in,2)    
 
-            RH_predictors(i,j,1) = 0.15!test_input_value!(ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
-            RH_predictors(i,j,2) = -0.03!test_input_value!(rh_2m_sv(i,j)-rh2_mean)/rh2_std !RH2
-            RH_predictors(i,j,3) = 0.07!test_input_value!(sdor(i,j)-sdor_mean)/sdor_std !sdor
-            RH_predictors(i,j,4) = -0.11!test_input_value!(surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
-            RH_predictors(i,j,5) = 0.01!test_input_value!(tdewpoint_2m(i,j)-tdewpoint_2m_mean)/tdewpoint_2m_std !2m dew-point temperature
-            RH_predictors(i,j,6) = -0.09!test_input_value!(temp_2m_sv(i,j)-temp_2m_mean)/temp_2m_std !2m temperature
-            RH_predictors(i,j,7) = 0.17!test_input_value!(p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
+            RH_predictors(i,j,1) = (ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
+            RH_predictors(i,j,2) = (RH_lml(i,j)-rh2_mean)/rh2_std !RH2
+            RH_predictors(i,j,3) = (sdor(i,j)-sdor_mean)/sdor_std !sdor
+            RH_predictors(i,j,4) = (surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
+            RH_predictors(i,j,5) = (tdewpoint_2m(i,j)-tdewpoint_2m_mean)/tdewpoint_2m_std !2m dew-point temperature
+            RH_predictors(i,j,6) = (temp_2m_sv(i,j)-temp_2m_mean)/temp_2m_std !2m temperature
+            RH_predictors(i,j,7) = (p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
 
             call ENNUF_RH_model(real(RH_predictors(i,j,:),4), RH_outputs(i,j))
 
-            qstd(i,j) = RH_outputs(i,j)*q_sat(i,j)
+            qstd(i,j) = 0.01*RH_outputs(i,j)*q_sat(i,j)
 
 
-            Th_predictors(i,j,1) = 0.15!test_input_value!(ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
-            Th_predictors(i,j,2) = -0.03!test_input_value!(rh_2m_sv(i,j)-rh2_mean)/rh2_std !RH2
-            Th_predictors(i,j,3) = 0.07!test_input_value!(sdor(i,j)-sdor_mean)/sdor_std !sdor
-            Th_predictors(i,j,4) = -0.11!test_input_value!(surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
-            Th_predictors(i,j,5) = 0.01!test_input_value!(p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
-            Th_predictors(i,j,6) = -0.09!test_input_value!(sqrt(u_10m_sv(i,j)**2 + v_10m_sv(i,j)**2)-wind_10m_mean)/wind_10m_std !10m wind speed
+            Th_predictors(i,j,1) = (ptemp_2m_sv(i,j)-ptemp_2m_mean)/ptemp_2m_std !ptemp_2m 
+            Th_predictors(i,j,2) = (RH_lml(i,j)-rh2_mean)/rh2_std !RH2
+            Th_predictors(i,j,3) = (sdor(i,j)-sdor_mean)/sdor_std !sdor
+            Th_predictors(i,j,4) = (surf_geopot(i,j)-surf_geopot_mean)/(surf_geopot_std) !surface geopotential
+            Th_predictors(i,j,5) = (p_half(i,j,num_levels+1)-surf_p_mean)/surf_p_std !surface pressure
+            Th_predictors(i,j,6) =(sqrt(u_10m_sv(i,j)**2 + v_10m_sv(i,j)**2)-wind_10m_mean)/wind_10m_std !10m wind speed
 
             call ENNUF_Th_model(real(Th_predictors(i,j,:),4), Th_outputs(i,j))
 
@@ -325,28 +353,42 @@ subroutine ENNUF_2d_T_RH_prediction(temp_in, q_in, u_in, v_in, t_surf_in, q_surf
             random_num_rh(i,j)    = MAX(random_num_rh(i,j), -3.0)
 
 
-            write(6,*) RH_outputs(i,j), TH_outputs(i,j), qstd(i,j), Tstd(i,j)
+            ! write(6,*) RH_outputs(i,j), TH_outputs(i,j), qstd(i,j), Tstd(i,j)
 
         enddo
     enddo
 
-  write(6,*) 'maxvals = ', maxval(RH_outputs), minval(RH_outputs), maxval(Th_outputs), minval(Th_outputs)
+  ! write(6,*) 'maxvals = ', maxval(RH_outputs), minval(RH_outputs), maxval(Th_outputs), minval(Th_outputs)
 
   if(id_theta_std > 0) used = send_data(id_theta_std, real(Th_outputs,8), Time)
   if(id_t_std > 0)     used = send_data(id_t_std, real(Tstd,8), Time)
-  if(id_RH_std > 0)    used = send_data(id_theta_std, real(RH_outputs*100.,8), Time)
-  if(id_q_std > 0)     used = send_data(id_t_std, real(qstd,8), Time)
+  if(id_RH_std > 0)    used = send_data(id_RH_std, real(RH_outputs,8), Time)
+  if(id_q_std > 0)     used = send_data(id_q_std, real(qstd,8), Time)
+
+  if(id_q_2m_sv > 0)     used = send_data(id_q_2m_sv, real(q_2m_sv,8), Time)
+  if(id_rh_2m_sv > 0)     used = send_data(id_rh_2m_sv, real(rh_2m_sv*100.,8), Time)
+  if(id_dew_2m_sv > 0)     used = send_data(id_dew_2m_sv, real(tdewpoint_2m,8), Time)
+  if(id_temp_2m_sv > 0)     used = send_data(id_temp_2m_sv, real(temp_2m_sv,8), Time)
+  if(id_ptemp_2m_sv > 0)     used = send_data(id_ptemp_2m_sv, real(ptemp_2m_sv,8), Time) 
+
+  if(id_es_2m_sv > 0)     used = send_data(id_es_2m_sv, real(es_2m,8), Time) 
+  if(id_qsat_2m_sv > 0)     used = send_data(id_qsat_2m_sv, real(q_sat,8), Time) 
+  if(id_RH_lml_sv > 0)     used = send_data(id_RH_lml_sv, real(RH_lml*100.,8), Time) 
+  if(id_sdor > 0)     used = send_data(id_sdor,sdor, Time) 
+
+
+
 
   pert_t(:,:,:) = temp_in(:,:,:)
   pert_q(:,:,:) = q_in(:,:,:)
 
   ! do z_tick=1, num_levels
-  !   pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + 0.01*random_num_theta* Tstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
+  !   pert_t(:,:,z_tick) = temp_in(:,:,z_tick) + random_num_theta* Tstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   !   pert_q(:,:,z_tick) = q_in(:,:,z_tick)    + random_num_rh*    qstd*(p_full(:,:,z_tick)/p_half(:,:,num_levels+1))
   ! enddo
 
     pert_t(:,:,num_levels) = pert_t(:,:,num_levels) + 0.001*real(random_num_theta* Tstd,8)
-    pert_q(:,:,num_levels) = pert_q(:,:,num_levels) + 0.001*real(random_num_theta* qstd,8)
+    pert_q(:,:,num_levels) = pert_q(:,:,num_levels) + 0.001*real(random_num_rh* qstd,8)
 
     !Need to clip T and q perturbations so that they're not crazy big
 
@@ -358,8 +400,8 @@ subroutine calc_surface_variables(t_atm,     q_atm_in,   u_atm,     v_atm,     p
                                   rough_mom, rough_heat, rough_moist, rough_scale, gust,            &      
                                   bucket_depth, land, seawater, avail,                                                            &                    
                                   temp_2m, u_10m, v_10m,                                            &
-                                  q_2m, rh_2m, ptemp_2m &                                     
-                                  )
+                                  q_2m, rh_2m, ptemp_2m, &                                     
+                                  RH_lml)
 
   real, intent(in),  dimension(:,:) :: &
        t_atm,     q_atm_in,   u_atm,     v_atm,              &
@@ -371,7 +413,7 @@ subroutine calc_surface_variables(t_atm,     q_atm_in,   u_atm,     v_atm,     p
   logical, intent(in), dimension(:,:) :: land, seawater, avail
   real, intent(out),  dimension(:,:) :: &       
        temp_2m, u_10m, v_10m,                                &
-       q_2m, rh_2m, ptemp_2m 
+       q_2m, rh_2m, ptemp_2m, RH_lml 
 
  integer :: j
 
@@ -381,8 +423,8 @@ subroutine calc_surface_variables(t_atm,     q_atm_in,   u_atm,     v_atm,     p
                                   rough_mom(:,j), rough_heat(:,j), rough_moist(:,j), rough_scale(:,j), gust(:,j),            &      
                                   bucket_depth(:,j), land(:,j), seawater(:,j), avail(:,j),                                                            &                    
                                   temp_2m(:,j), u_10m(:,j), v_10m(:,j),                                            &
-                                  q_2m(:,j), rh_2m(:,j), ptemp_2m(:,j) &                                     
-                                  )
+                                  q_2m(:,j), rh_2m(:,j), ptemp_2m(:,j), &                                     
+                                  RH_lml(:,j))
   enddo
 
 end subroutine calc_surface_variables
@@ -393,8 +435,8 @@ subroutine calc_surface_variables_1d(t_atm,     q_atm_in,   u_atm,     v_atm,   
                                   rough_mom, rough_heat, rough_moist, rough_scale, gust,            &      
                                   bucket_depth, land, seawater, avail,                                                            &                    
                                   temp_2m, u_10m, v_10m,                                            &
-                                  q_2m, rh_2m, ptemp_2m &                                     
-                                  )
+                                  q_2m, rh_2m, ptemp_2m, &                                     
+                                  RH_lml)
 
   real, intent(in),  dimension(:) :: &
        t_atm,     q_atm_in,   u_atm,     v_atm,              &
@@ -406,7 +448,7 @@ subroutine calc_surface_variables_1d(t_atm,     q_atm_in,   u_atm,     v_atm,   
   logical, intent(in), dimension(:) :: land, seawater, avail
   real, intent(out),  dimension(:) :: &       
        temp_2m, u_10m, v_10m,                                &
-       q_2m, rh_2m, ptemp_2m 
+       q_2m, rh_2m, ptemp_2m, RH_lml 
 
   real, dimension(size(t_atm,1)) :: &
       w_atm,     u_star,     b_star,    q_star,             &
@@ -416,7 +458,8 @@ subroutine calc_surface_variables_1d(t_atm,     q_atm_in,   u_atm,     v_atm,   
       t_surf0,  t_surf1,  u_dif,     v_dif,               &
       rho_drag, drag_t,    drag_m,   drag_q,    rho,      &
       q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust,   &
-      e_sat_2m, q_sat_2m, ex_del_h, ex_del_m, ex_del_q
+      e_sat_2m, q_sat_2m, ex_del_h, ex_del_m, ex_del_q,   &
+      esat_atm
 
   real, parameter:: del_temp=0.1, del_temp_inv=1.0/del_temp
   real :: zrefm, zrefh      
@@ -566,6 +609,8 @@ subroutine calc_surface_variables_1d(t_atm,     q_atm_in,   u_atm,     v_atm,   
 
       call escomp ( temp_2m, e_sat_2m )
 
+      ! write(6,*) maxval(ex_del_q), minval(ex_del_q), maxval(ex_del_h), minval(ex_del_h), 'ex_del_q, ex_del_h'
+
       if(use_mixing_ratio) then
          ! surface mixing ratio at saturation
          q_sat_2m   = d622 * e_sat_2m / (p_surf - e_sat_2m)
@@ -573,12 +618,32 @@ subroutine calc_surface_variables_1d(t_atm,     q_atm_in,   u_atm,     v_atm,   
          q_sat_2m   = d622 * e_sat_2m / p_surf
       else
          ! surface specific humidity at saturation
-         q_sat_2m   = d622 * e_sat_2m / (p_surf - d378*e_sat)
+         q_sat_2m   = d622 * e_sat_2m / (p_surf - d378*e_sat_2m)
       endif
 
       ! ------- reference relative humidity -----------
       where (avail) &
          rh_2m = q_2m / q_sat_2m
+
+
+      CALL LOOKUP_ES(t_atm,esat_atm)  !same as escomp
+
+      !calculate denominator in qsat formula
+      if(do_simple) then
+        RH_lml = p_surf
+      else
+        RH_lml = p_surf-d378*esat_atm
+      endif
+
+      !limit denominator to esat, and thus qs to epsilon
+      !this is done to avoid blow up in the upper stratosphere
+      !where pfull ~ esat
+      RH_lml = MAX(RH_lml,esat_atm)
+
+      !calculate RH
+      RH_lml=q_atm_in/(d622*esat_atm/RH_lml)
+
+
 end subroutine calc_surface_variables_1d
 
 end module ml_interface_mod

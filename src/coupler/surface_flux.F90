@@ -551,7 +551,7 @@ subroutine surface_flux_1d (                                           &
          q_sat_2m   = d622 * e_sat_2m / p_surf
       else
          ! surface specific humidity at saturation
-         q_sat_2m   = d622 * e_sat_2m / (p_surf - d378*e_sat)
+         q_sat_2m   = d622 * e_sat_2m / (p_surf - d378*e_sat_2m)
       endif
 
       ! ------- reference relative humidity -----------

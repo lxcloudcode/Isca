@@ -6325,19 +6325,19 @@ DATA w_keras_tensor_5(64, :) / -0.24663938581943512 /
 
 
 CALL dense(input_layer_87, y_keras_tensor, 6, 64, w_keras_tensor, &
-b_keras_tensor, 'leakyrelu ' , real(0.3, 4))
+b_keras_tensor, 'leakyrelu ' , real(0.1, 4))
 
 CALL dense(y_keras_tensor, y_keras_tensor_1, 64, 64, w_keras_tensor_1, &
-b_keras_tensor_1, 'leakyrelu ' , real(0.3, 4))
+b_keras_tensor_1, 'leakyrelu ' , real(0.1, 4))
 
 CALL dense(y_keras_tensor_1, y_keras_tensor_2, 64, 64, w_keras_tensor_2, &
-b_keras_tensor_2, 'leakyrelu ' , real(0.3, 4))
+b_keras_tensor_2, 'leakyrelu ' , real(0.1, 4))
 
 CALL dense(y_keras_tensor_2, y_keras_tensor_3, 64, 64, w_keras_tensor_3, &
-b_keras_tensor_3, 'leakyrelu ' , real(0.3, 4))
+b_keras_tensor_3, 'leakyrelu ' , real(0.1, 4))
 
 CALL dense(y_keras_tensor_3, y_keras_tensor_4, 64, 64, w_keras_tensor_4, &
-b_keras_tensor_4, 'leakyrelu ' , real(0.3, 4))
+b_keras_tensor_4, 'leakyrelu ' , real(0.1, 4))
 
 CALL dense(y_keras_tensor_4, y_dense_495, 64, 1, w_keras_tensor_5, &
 b_keras_tensor_5, 'linear    ' , real(0.0, 4))
