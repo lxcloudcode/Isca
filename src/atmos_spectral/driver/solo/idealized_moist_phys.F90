@@ -1014,7 +1014,7 @@ case(DRY_CONV)
 case(RAS_CONV)
 
     call ras   (is,   js,     Time,                                                  &
-                tg(:,:,:,previous),   grid_tracers(:,:,:,previous,nsphum),           &
+                pert_t,   pert_q,           &
                 ug(:,:,:,previous),  vg(:,:,:,previous),    p_full(:,:,:,previous),  &
                 p_half(:,:,:,previous), z_half(:,:,:,previous), coldT,  delta_t,     &
                 conv_dt_tg,   conv_dt_qg, dt_ug_conv,  dt_vg_conv,                   &
